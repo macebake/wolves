@@ -1,4 +1,6 @@
 from src.llms.base_client import BaseLLMClient
+from src.conversation.message import GameMessage
+from typing import List
 
 class BasePlayer:
     def __init__(self, name: str, llm_client: BaseLLMClient):
@@ -11,7 +13,8 @@ class BasePlayer:
         system = f"You are {self.name}, a player in a game of Werewolf. Introduce yourself briefly."
         return await self.llm.chat([], system)
         
-    async def get_message(self, history: list) -> dict:
+    async def get_message(self, history: List[GameMessage]) -> dict:
         system = f"You are {self.name}, a {self.role}. Decide if you want to speak."
-        response = await self.llm.chat(history, system)
-        return json.loads(response)
+        messages = [{"content": msg.content} for msg in history]
+        response = await self.llm.chat(messages, system)
+        return response

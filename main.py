@@ -3,6 +3,7 @@ from dotenv import load_dotenv
 from src.game.orchestrator import GameOrchestrator
 from src.game.game_state import GameState
 from src.game.narrator import Narrator
+from src.players.base_player import BasePlayer
 from src.players.roles.villager import Villager
 from src.players.roles.werewolf import Werewolf
 from src.utils.logger import GameLogger
@@ -12,32 +13,17 @@ import asyncio
 async def main():
     load_dotenv()
     
-    # Initialize LLM clients
-    llm_factory = LLMFactory()
-    default_llm = os.getenv("DEFAULT_LLM")
-    
-    # Initialize logger
+    llm = LLMFactory().create_client()
     logger = GameLogger()
-    game_state = GameState()
+    narrator = Narrator(llm)
     
-    # Create players with potentially different LLMs
+    # Create players
     players = [
-        Villager("Alice", llm_factory.create_client(default_llm)),
-        Villager("Bob", llm_factory.create_client(default_llm)),
-        Villager("Charlie", llm_factory.create_client(default_llm)),
-        Werewolf("Diana", llm_factory.create_client(default_llm))
+        BasePlayer(f"Player{i}", llm) for i in range(4)
     ]
     
-    # Create narrator with its own LLM
-    narrator = Narrator(llm_factory.create_client(default_llm))
-    
-    orchestrator = GameOrchestrator(
-        game_state=game_state,
-        players=players,
-        narrator=narrator,
-        logger=logger
-    )
-    
+    orchestrator = GameOrchestrator(players, narrator, logger)
+
     # Await the run method
     await orchestrator.run()
 

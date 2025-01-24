@@ -2,8 +2,9 @@ import random
 from typing import List, Dict
 
 class RoleManager:
-    def __init__(self, num_players: int):
-        self.num_players = num_players
+    def __init__(self, players: List[str]):
+        self.num_players = len(players)
+        self.players = players
         self.roles = self._generate_roles()
         
     def _generate_roles(self) -> List[str]:
