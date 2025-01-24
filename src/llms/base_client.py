@@ -1,3 +1,5 @@
+from abc import ABC, abstractmethod
+
 class BaseLLMClient(ABC):
    @abstractmethod
    async def chat(self, messages: list, system: str) -> str:

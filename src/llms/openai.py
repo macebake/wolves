@@ -1,4 +1,4 @@
-from src.llm.base_client import BaseLLMClient
+from src.llms.base_client import BaseLLMClient
 from openai import AsyncOpenAI
 import os
 
