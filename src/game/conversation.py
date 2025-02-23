@@ -7,15 +7,15 @@ class GameMessage:
     player: str
     content: str
     visibility: str = "public"  # public, private, or narrator
-    
+
 class ConversationManager:
     def __init__(self):
         self.messages: List[GameMessage] = []
         self.player_roles: Dict[str, str] = {}
-        
+
     def add_message(self, message: GameMessage):
         self.messages.append(message)
-        
+
     def assign_role(self, player_name: str, role: str):
         self.player_roles[player_name] = role
         self.add_message(GameMessage(

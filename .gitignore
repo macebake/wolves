@@ -1,7 +1,10 @@
 .env
 logs/*
+game_logs/*
 
 # Ignore Python bytecode
 __pycache__/
 *.pyc
-*.pyo
+venv/
+
+.DS_Store
