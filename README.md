@@ -1,2 +1,2 @@
-Run with: `python3 main.py`
+Run with: `python main.py`
 Populate .env
