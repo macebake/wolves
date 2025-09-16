@@ -7,18 +7,18 @@ class Narrator:
         self.llm = llm_client
         
     def announce_deaths(self, deaths: set) -> str:
-        print("Announcing deaths")
-        system = "You are the narrator. Announce the deaths concisely, with slight dramatic flair. Make sure to call for the players to deliberate about who they think is responsible, and should be exiled. That is their task!"
-        messages = [{"role": "user", "content": str(deaths)}]
-        messages.append({"role": "user", "content": system})
+        system = f"""
+        You are the narrator in a game of Werewolves. Announce the deaths concisely, with slight dramatic flair. Make sure to call for the players to deliberate about who they think is responsible, and should be exiled. That is their task!
+
+        Tonight's victim(s): {deaths}
+        """
+        messages= [{"role": "user", "content": system}]
         return self.llm.get_response(messages)
 
-    def should_start_vote(self, conversation_history: List[GameMessage]) -> bool:
-        print("Checking if vote should start")
-        
+    def should_start_vote(self, conversation_history: List[GameMessage]) -> bool:        
         # Add safety check - max 3 rounds of discussion
         discussion_rounds = sum(1 for msg in conversation_history if msg.phase == "discussion")
-        if discussion_rounds >= 3:
+        if discussion_rounds >= 5:
             print("Max discussion rounds reached, forcing vote")
             return True
             
@@ -53,16 +53,13 @@ class Narrator:
         return response == "TRUE"
     
     def announce_vote(self) -> str:
-        print("Announcing vote")
         system = "You are the narrator. Call for a vote dramatically but briefly."
         return self.llm.get_response(system)
 
     def announce_night(self) -> str:
-        print("announcing night")
         system = "You are the narrator. Announce that night has fallen, dramatically but briefly."
         return self.llm.get_response(system)
 
     def announce_dawn(self) -> str:
-        print("announcing dawn")
         system = "You are the narrator. Announce that dawn has arrived, dramatically but briefly."
         return self.llm.get_response(system)

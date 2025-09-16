@@ -17,7 +17,7 @@ def main():
 
     # Create players
     players = [
-        BasePlayer(LLMFactory().create_client()) for i in range(4)
+        BasePlayer(LLMFactory().create_client()) for i in range(7)
     ]
 
     orchestrator = GameOrchestrator(players, narrator, logger)
@@ -26,4 +26,5 @@ def main():
     orchestrator.run()
 
 if __name__ == "__main__":
-    main()
+    for i in range(100):
+        main()

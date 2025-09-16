@@ -7,6 +7,8 @@ from src.game.role_manager import RoleManager
 from typing import List
 from src.game.roles import BasePlayer, Villager, Werewolf
 
+import random
+
 
 class GameOrchestrator:
     def __init__(self, players: List[BasePlayer], narrator: Narrator, logger: GameLogger):
@@ -52,7 +54,6 @@ class GameOrchestrator:
         self.logger.log({"event": "introduction_phase_end"})
 
     def role_assignment_phase(self):
-        print("Starting role assignment phase")
         if not self.role_manager:
             raise ValueError("Role manager not initialized - introduction phase must be completed first")
             
@@ -82,7 +83,6 @@ class GameOrchestrator:
         self.game_state = GameState(roles)
 
     def get_message(self, history: List[GameMessage]) -> dict:
-        print("Getting message")
         system = f"You are {self.name}, a {self.role}. Given the game state, share your thoughts about who might be a werewolf and why."
         messages = [{"content": msg.content} for msg in history]
         messages.append({"content": system})
@@ -90,7 +90,6 @@ class GameOrchestrator:
         return {"wants_to_speak": True, "message": response}
 
     def night_phase(self):
-        print("Starting night phase")
         # Announce night falling
         night_start = self.narrator.announce_night()
         self.conversation.add_message(GameMessage(
@@ -109,7 +108,7 @@ class GameOrchestrator:
         if werewolves:
             # Let werewolves deliberate
             for wolf in werewolves:
-                decision = wolf.get_message(self.conversation.get_player_history(wolf.name))
+                decision = wolf.get_message(self.conversation.get_player_history(wolf.name), [p.name for p in self.players if p.is_alive])
                 self.conversation.add_message(GameMessage(
                     phase="night",
                     player=wolf.name,
@@ -128,7 +127,7 @@ class GameOrchestrator:
             self.game_state.kill_player(victim)
             self.logger.log({
                 "event": "werewolf_kill",
-                "data": {"victim": victim}
+                "data": {"victim": victim.name}
             })
 
         # Announce night ending
@@ -139,25 +138,93 @@ class GameOrchestrator:
             content=night_end,
             visibility="public"
         ))
+    
+    def _conduct_werewolf_vote(self, werewolves: List[BasePlayer]) -> BasePlayer:
+        """Conducts vote among werewolves to choose victim"""
+        if not werewolves:
+            return None
+            
+        votes = {}
+        # Each werewolf submits their vote
+        for werewolf in werewolves:
+            vote = werewolf.get_message(self.conversation.get_player_history(werewolf.name), [p.name for p in self.players if p.is_alive])
+            # Remove any whitespace and standardize case
+            vote = vote.strip().lower()
+            votes[vote] = votes.get(vote, 0) + 1
+            
+            self.logger.log({
+                "event": "werewolf_vote",
+                "data": {"voter": werewolf.name, "vote": vote}
+            })
+        
+        # Find the candidate with most votes
+        if not votes:
+            return None
+            
+        max_votes = max(votes.values())
+        candidates = [name for name, count in votes.items() if count == max_votes]
+        
+        # Break ties randomly
+        chosen_name = random.choice(candidates)
 
-    def _conduct_werewolf_vote(self, werewolves: List[BasePlayer]) -> str:
-        print("Conducting werewolf vote")
-        # For now, just pick first living non-werewolf
-        living_villagers = [
-            p.name for p in self.players 
-            if p.role != "werewolf"
-            and p.is_alive
-        ]
-        return living_villagers[0] if living_villagers else None
+        # Find closest matching player name
+        for player in self.players:
+            if chosen_name in player.name.lower():
+                return player
 
-    def _conduct_vote(self) -> str:
-        print("Conducting vote")
-        # For now, just pick first living player
-        living = list(self.players)
-        return living[0] if living else None
+        # Fallback to random living non-werewolf if no match
+        return random.choice([p for p in self.players if p.is_alive and p.role != "werewolf"])
+
+    def _conduct_vote(self) -> BasePlayer:
+        """Conducts village vote to exile a player"""
+        votes = {}
+        living_players = [p for p in self.players if p.is_alive]
+        
+        # Each living player submits their vote
+        for player in living_players:
+            # Add special voting prompt to history
+            vote_prompt = GameMessage(
+                phase="voting",
+                player="narrator",
+                content=f"""
+                    Cast your vote for who to exile. Your only options are {", ".join([p.name for p in living_players])}.
+                    You must respond only with their name, and no additional commentary whatsoever.
+                """,
+                visibility="public"
+            )
+            history = self.conversation.get_player_history(player.name)
+            history.append(vote_prompt)
+            vote = player.get_message(history, names=[p.name for p in self.players if p.is_alive])
+            # Remove any whitespace and standardize case
+            vote = vote.strip().lower()
+            votes[vote] = votes.get(vote, 0) + 1
+            
+            self.logger.log({
+                "event": "village_vote",
+                "data": {"voter": player.name, "vote": vote}
+            })
+        
+        # Find candidate with most votes
+        if not votes:
+            return None
+        
+        print("votes:", votes)
+
+        max_votes = max(votes.values())
+        candidates = [name for name, count in votes.items() if count == max_votes]
+
+         # Break ties randomly
+        chosen_name = random.choice(candidates)
+
+        # Find closest matching player name
+        for player in self.players:
+            if chosen_name in player.name.lower():
+                return player
+
+        # Fallback to random living non-werewolf if no match
+        return random.choice([p for p in self.players if p.is_alive and p.role != "werewolf"])
 
     def day_phase(self):
-        print("Starting day phase")
         # Announce deaths
         deaths = self.narrator.announce_deaths(self.game_state.last_deaths)
         message = GameMessage(phase="day", player="narrator", content=deaths)
@@ -167,12 +234,9 @@ class GameOrchestrator:
             "data": {"deaths": list(self.game_state.last_deaths), "message": deaths}
         })
 
-        for player in deaths:
-            self.game_state.kill_player(player)
-        
         discussion_ended = False
         while not discussion_ended:
-            alive_players = [p for p in self.game_state.living_players]
+            alive_players = [p for p in self.players if p.is_alive]
             for player in alive_players:
                 response = player.get_message(self.conversation.get_player_history(player.name))
                 message = GameMessage(
@@ -197,6 +261,7 @@ class GameOrchestrator:
             player="narrator",
             content=vote_announcement
         ))
+
         self.logger.log({
             "event": "voting_start",
             "data": {"message": vote_announcement}
@@ -206,11 +271,10 @@ class GameOrchestrator:
         self.game_state.kill_player(exile)
         self.logger.log({
             "event": "player_exiled",
-            "data": {"player": exile}
+            "data": {"player": exile.name}
         })
-           
+
     def _conduct_discussion(self):
-        print("Conducting discussion")
         alive_players = [p for p in self.game_state.living_players]
         for player in alive_players:
             response = player.get_message(self.conversation.get_player_history(player.name))
@@ -227,17 +291,49 @@ class GameOrchestrator:
             })
 
     def end_game(self):
-        print("Ending game")
         """End the game and log final state."""
-        game_over_msg = "Game Over!"
+        
+        # Count surviving werewolves
+        werewolves = sum(1 for p in self.game_state.living_players 
+                        if self.game_state.players[p] == "werewolf")
+        villagers = len(self.game_state.living_players) - werewolves
+        
+        # Determine winner
+        winner = "Villagers" if werewolves == 0 else "Werewolves"
+        
+        # Group players by role with status indicators
+        player_roles = {
+            "Werewolves": [p for p, r in self.game_state.players.items() if r == "werewolf"],
+            "Villagers": [p for p, r in self.game_state.players.items() if r == "villager"]
+        }
+        
+        player_statuses = {
+            player: "🪦" if player in self.game_state.dead_players else "✨"
+            for player in self.game_state.players
+        }
+        
+        final_state = {
+            role: [f"{player} {player_statuses[player]}" for player in players]
+            for role, players in player_roles.items()
+        }
+        
+        # Create detailed game over message
+        game_over_msg = f"Game Over! The {winner} have won!"
+        
         final_message = GameMessage(
             phase="end",
             player="narrator",
             content=game_over_msg,
             visibility="public"
         )
+
         self.conversation.add_message(final_message)
         self.logger.log({
             "event": "game_end",
-            "data": {"message": game_over_msg}
+            "data": {
+                "winner": winner,
+                "message": game_over_msg,
+                "werewolves": final_state['Werewolves'],
+                "villagers": final_state['Villagers'],
+            }
         })

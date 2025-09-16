@@ -14,7 +14,6 @@ class FireworksClient(BaseLLMClient):
         self.model_alias = model_alias
 
     def get_response(self, messages, temperature=0.7):
-        print("Messages: fireworks ", messages)
         url = "https://api.fireworks.ai/inference/v1/chat/completions"
         messages = [{"role": "user", "content": message} for message in messages]
         payload = {
